@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Navegador Proxy & Juegos</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #0f172a; color: white; text-align: center; margin: 0; padding: 20px; }
+        .buscador { margin: 20px auto; max-width: 600px; display: flex; gap: 10px; }
+        input { flex: 1; padding: 12px; font-size: 16px; border-radius: 8px; border: none; outline: none; }
+        button { padding: 12px 24px; font-size: 16px; background: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        button:hover { background: #2563eb; }
+        .seccion-juegos { margin-top: 30px; background: #1e293b; padding: 20px; border-radius: 12px; max-width: 450px; margin-left: auto; margin-right: auto; }
+        canvas { background: #000; border: 2px solid #3b82f6; margin-top: 10px; max-width: 100%; }
+        .controles-tactiles { display: grid; grid-template-columns: repeat(3, 60px); gap: 10px; justify-content: center; margin-top: 15px; }
+        .controles-tactiles button { padding: 15px; font-size: 18px; }
+    </style>
+    <script src="/uv/uv.bundle.js"></script>
+    <script src="/uv/uv.config.js"></script>
+</head>
+<body>
+
+    <h1>🚀 Mi Proxy Web</h1>
+    <p>Escribe una página web o busca algo para navegar</p>
+
+    <form id="proxy-form" class="buscador">
+        <input id="url-input" type="text" placeholder="Ej: wikipedia.org o buscar..." required>
+        <button type="submit">Ir</button>
+    </form>
+
+    <div class="seccion-juegos">
+        <h2>🐍 Juego Real: Snake</h2>
+        <p>Puntos: <span id="puntos">0</span></p>
+        <canvas id="juego" width="360" height="360"></canvas>
+        
+        <div class="controles-tactiles">
+            <div></div>
+            <button onclick="cambiarDir('UP')">⬆️</button>
+            <div></div>
+            <button onclick="cambiarDir('LEFT')">⬅️</button>
+            <button onclick="cambiarDir('DOWN')">⬇️</button>
+            <button onclick="cambiarDir('RIGHT')">➡️</button>
+        </div>
+        <br>
+        <button onclick="iniciarJuego()">Reiniciar Juego</button>
+    </div>
+
+    <script>
+        const form = document.getElementById('proxy-form');
+        const input = document.getElementById('url-input');
+
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            await navigator.serviceWorker.register('/sw.js', { scope: __uv$config.prefix });
+
+            let url = input.value.trim();
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                if (url.includes('.') && !url.includes(' ')) {
+                    url = 'https://' + url;
+                } else {
+                    url = 'https://google.com' + encodeURIComponent(url);
+                }
+            }
+            window.location.href = __uv$config.prefix + __uv$config.encodeUrl(url);
+        });
+
+        const canvas = document.getElementById("juego");
+        const ctx = canvas.getContext("2d");
+        const box = 20;
+        let snake, food, d, score, game;
+
+        function iniciarJuego() {
+            clearInterval(game);
+            snake = [{ x: 9 * box, y: 9 * box }];
+            food = { x: Math.floor(Math.random() * 17 + 1) * box, y: Math.floor(Math.random() * 17 + 1) * box };
+            d = "RIGHT";
+            score = 0;
+            document.getElementById("puntos").innerText = score;
+            game = setInterval(dibujar, 120);
+        }
+
+        function cambiarDir(nuevaDir) {
+            if (nuevaDir == "LEFT" && d != "RIGHT") d = "LEFT";
+            else if (nuevaDir == "UP" && d != "DOWN") d = "UP";
+            else if (nuevaDir == "RIGHT" && d != "LEFT") d = "RIGHT";
+            else if (nuevaDir == "DOWN" && d != "UP") d = "DOWN";
+        }
+
+        document.addEventListener("keydown", (event) => {
+            if ([37, 38, 39, 40].indexOf(event.keyCode) > -1) event.preventDefault();
+            if (event.keyCode == 37) cambiarDir("LEFT");
+            else if (event.keyCode == 38) cambiarDir("UP");
+            else if (event.keyCode == 39) cambiarDir("RIGHT");
+            else if (event.keyCode == 40) cambiarDir("DOWN");
+        });
+
+        function dibujar() {
+            ctx.fillStyle = "#000";
+            ctx.fillRect(0, 0, 360, 360);
+
+            for (let i = 0; i < snake.length; i++) {
+                ctx.fillStyle = (i == 0) ? "#3b82f6" : "#60a5fa";
+                ctx.fillRect(snake[i].x, snake[i].y, box, box);
+            }
+
+            ctx.fillStyle = "#ef4444";
+            ctx.fillRect(food.x, food.y, box, box);
+
+            let snakeX = snake[0].x;
+            let snakeY = snake[0].y;
+
+            if (d == "LEFT") snakeX -= box;
+            if (d == "UP") snakeY -= box;
+            if (d == "RIGHT") snakeX += box;
+            if (d == "DOWN") snakeY += box;
+
+            if (snakeX == food.x && snakeY == food.y) {
+                score++;
+                document.getElementById("puntos").innerText = score;
+                food = { x: Math.floor(Math.random() * 17 + 1) * box, y: Math.floor(Math.random() * 17 + 1) * box };
+            } else {
+                snake.pop();
+            }
+
+            let newHead = { x: snakeX, y: snakeY };
+
+            if (snakeX < 0 || snakeX >= 360 || snakeY < 0 || snakeY >= 360 || colision(newHead, snake)) {
+                clearInterval(game);
+            }
+            snake.unshift(newHead);
+        }
+
+        function colision(head, array) {
+            for (let i = 0; i < array.length; i++) {
+                if (head.x == array[i].x && head.y == array[i].y) return true;
+            }
+            return false;
+        }
+
+        iniciarJuego();
+    </script>
+</body>
+</html>
